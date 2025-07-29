@@ -1,4 +1,4 @@
-package detect
+package detector
 
 import (
 	"bytes"
@@ -16,8 +16,9 @@ import (
 )
 
 type Config struct {
-	GitRootPath string // path to the root directory of the git repository
-	BaseCommit  string // base commit revision to compare against, e.g., "HEAD~" for the previous commit
+	GitRootPath   string   // path to the root directory of the git repository
+	BaseCommit    string   // base commit revision to compare against, e.g., "HEAD~" for the previous commit
+	GoModulePaths []string // paths to go modules
 }
 
 func DetectChangedPackages(config *Config) ([]string, error) {
@@ -67,9 +68,13 @@ func newChangeDetector(config *Config) (*changeDetector, error) {
 }
 
 func (cd *changeDetector) detectChangedPackages() ([]string, error) {
-	goPackages, err := golang.ListPackages(cd.gitRootFullPath)
-	if err != nil {
-		return nil, err
+	goPackages := make([]golang.GoPackage, 0, 64)
+	for _, modulePath := range cd.config.GoModulePaths {
+		pkgs, err := golang.ListPackages(modulePath)
+		if err != nil {
+			return nil, err
+		}
+		goPackages = append(goPackages, pkgs...)
 	}
 
 	var changedPackages = make(map[string]struct{})

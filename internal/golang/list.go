@@ -3,6 +3,7 @@ package golang
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os/exec"
 )
@@ -30,13 +31,13 @@ func ListPackages(workingDir string) ([]GoPackage, error) {
 }
 
 func goListJSON[T any](workingDir string, options ...string) ([]T, error) {
-	cmd := exec.Command("go", append([]string{"list", "-json"}, options...)...)
+	cmd := exec.Command(goCmd, append([]string{"list", "-json"}, options...)...)
 	cmd.Dir = workingDir
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	err := cmd.Run()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to run go-list: %w", err)
 	}
 
 	dec := json.NewDecoder(&out)
@@ -46,7 +47,7 @@ func goListJSON[T any](workingDir string, options ...string) ([]T, error) {
 		if err := dec.Decode(&obj); err == io.EOF {
 			break
 		} else if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to decode JSON: %w", err)
 		}
 		results = append(results, obj)
 	}
