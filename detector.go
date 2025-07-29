@@ -21,7 +21,12 @@ type Config struct {
 	GoModulePaths []string // paths to go modules
 }
 
-func DetectChangedPackages(config *Config) ([]string, error) {
+type Package struct {
+	Dir        string // directory of the package
+	ImportPath string // import path of the package
+}
+
+func DetectChangedPackages(config *Config) ([]Package, error) {
 	detector, err := newChangeDetector(config)
 	if err != nil {
 		return nil, err
@@ -67,8 +72,8 @@ func newChangeDetector(config *Config) (*changeDetector, error) {
 	}, nil
 }
 
-func (cd *changeDetector) detectChangedPackages() ([]string, error) {
-	goPackages := make([]golang.GoPackage, 0, 64)
+func (cd *changeDetector) detectChangedPackages() ([]Package, error) {
+	goPackages := make([]golang.Package, 0, 64)
 	for _, modulePath := range cd.config.GoModulePaths {
 		pkgs, err := golang.ListPackages(modulePath)
 		if err != nil {
@@ -77,12 +82,12 @@ func (cd *changeDetector) detectChangedPackages() ([]string, error) {
 		goPackages = append(goPackages, pkgs...)
 	}
 
-	var changedPackages = make(map[string]struct{})
+	var changedPackages = make(map[string]*golang.Package)
 	for _, goPackage := range goPackages {
 		if changed, err := cd.isPackageChanged(&goPackage); err != nil {
 			return nil, err
 		} else if changed {
-			changedPackages[goPackage.ImportPath] = struct{}{}
+			changedPackages[goPackage.ImportPath] = &goPackage
 		}
 	}
 
@@ -92,18 +97,21 @@ func (cd *changeDetector) detectChangedPackages() ([]string, error) {
 		} else if updated, err := cd.isModuleUpdated(&goPackage, changedPackages); err != nil {
 			return nil, err
 		} else if updated {
-			changedPackages[goPackage.ImportPath] = struct{}{}
+			changedPackages[goPackage.ImportPath] = &goPackage
 		}
 	}
 
-	var results []string
+	var results []Package
 	for pkg := range changedPackages {
-		results = append(results, pkg)
+		results = append(results, Package{
+			Dir:        changedPackages[pkg].Dir,
+			ImportPath: changedPackages[pkg].ImportPath,
+		})
 	}
 	return results, nil
 }
 
-func (cd *changeDetector) isPackageChanged(goPackage *golang.GoPackage) (bool, error) {
+func (cd *changeDetector) isPackageChanged(goPackage *golang.Package) (bool, error) {
 	// 1. Check if the go source files have changed
 	for _, file := range goPackage.GoFiles {
 		fullPath := filepath.Join(goPackage.Dir, file)
@@ -118,7 +126,7 @@ func (cd *changeDetector) isPackageChanged(goPackage *golang.GoPackage) (bool, e
 	return false, nil
 }
 
-func (cd *changeDetector) isModuleUpdated(goPackage *golang.GoPackage, changedPackages map[string]struct{}) (bool, error) {
+func (cd *changeDetector) isModuleUpdated(goPackage *golang.Package, changedPackages map[string]*golang.Package) (bool, error) {
 	changedModules, err := cd.listChangedModules(goPackage)
 	if err != nil {
 		return false, err
@@ -147,7 +155,7 @@ func (cd *changeDetector) isModuleUpdated(goPackage *golang.GoPackage, changedPa
 	return false, nil
 }
 
-func (cd *changeDetector) listChangedModules(goPackage *golang.GoPackage) (map[string]struct{}, error) {
+func (cd *changeDetector) listChangedModules(goPackage *golang.Package) (map[string]struct{}, error) {
 	goModFullPath := goPackage.Module.GoMod
 	if cache, ok := cd.changedModulesCache[goModFullPath]; ok {
 		return cache, nil

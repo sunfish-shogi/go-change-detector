@@ -33,6 +33,6 @@ func main() {
 	}
 
 	for _, pkg := range changedPackages {
-		println(pkg)
+		println(pkg.Dir)
 	}
 }

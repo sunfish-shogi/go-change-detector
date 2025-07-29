@@ -8,7 +8,7 @@ import (
 	"os/exec"
 )
 
-type GoPackage struct {
+type Package struct {
 	Dir        string // full path to the package directory
 	ImportPath string // import path of the package
 	Name       string // package name
@@ -26,8 +26,8 @@ type GoPackage struct {
 	Deps           []string // paths of all packages imported by this package, recursively
 }
 
-func ListPackages(workingDir string) ([]GoPackage, error) {
-	return goListJSON[GoPackage](workingDir, "./...")
+func ListPackages(workingDir string) ([]Package, error) {
+	return goListJSON[Package](workingDir, "./...")
 }
 
 func goListJSON[T any](workingDir string, options ...string) ([]T, error) {
