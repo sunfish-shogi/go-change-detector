@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/sunfish-shogi/go-change-detector/internal/git"
 	"github.com/sunfish-shogi/go-change-detector/internal/golang"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
@@ -16,6 +17,7 @@ import (
 
 type Config struct {
 	GitRootPath string // path to the root directory of the git repository
+	BaseCommit  string // base commit revision to compare against, e.g., "HEAD~" for the previous commit
 }
 
 func DetectChangedPackages(config *Config) ([]string, error) {
@@ -27,7 +29,10 @@ func DetectChangedPackages(config *Config) ([]string, error) {
 }
 
 type changeDetector struct {
-	gitRootFullPath string // full path to the git root directory
+	config              *Config
+	gitRootFullPath     string                         // full path to the git root directory
+	changedModulesCache map[string]map[string]struct{} // cache for changed modules
+	changedGoFiles      map[string]struct{}            // full paths of changed Go source files
 }
 
 func newChangeDetector(config *Config) (*changeDetector, error) {
@@ -43,8 +48,21 @@ func newChangeDetector(config *Config) (*changeDetector, error) {
 		}
 		gitRootFullPath = path
 	}
+	changedFiles, err := git.ChangedFilesFrom(gitRootFullPath, config.BaseCommit)
+	if err != nil {
+		return nil, err
+	}
+	changedGoFiles := make(map[string]struct{})
+	for _, file := range changedFiles {
+		if strings.HasSuffix(file, ".go") {
+			changedGoFiles[filepath.Join(gitRootFullPath, file)] = struct{}{}
+		}
+	}
 	return &changeDetector{
-		gitRootFullPath: gitRootFullPath,
+		config:              config,
+		gitRootFullPath:     gitRootFullPath,
+		changedModulesCache: make(map[string]map[string]struct{}),
+		changedGoFiles:      changedGoFiles,
 	}, nil
 }
 
@@ -54,36 +72,60 @@ func (cd *changeDetector) detectChangedPackages() ([]string, error) {
 		return nil, err
 	}
 
-	var changes []string
+	var changedPackages = make(map[string]struct{})
 	for _, goPackage := range goPackages {
 		if changed, err := cd.isPackageChanged(&goPackage); err != nil {
 			return nil, err
 		} else if changed {
-			changes = append(changes, goPackage.ImportPath)
+			changedPackages[goPackage.ImportPath] = struct{}{}
 		}
 	}
 
-	return changes, nil
+	for _, goPackage := range goPackages {
+		if _, exists := changedPackages[goPackage.ImportPath]; exists {
+			continue // Skip packages that are already marked as changed
+		} else if updated, err := cd.isModuleUpdated(&goPackage, changedPackages); err != nil {
+			return nil, err
+		} else if updated {
+			changedPackages[goPackage.ImportPath] = struct{}{}
+		}
+	}
+
+	var results []string
+	for pkg := range changedPackages {
+		results = append(results, pkg)
+	}
+	return results, nil
 }
 
 func (cd *changeDetector) isPackageChanged(goPackage *golang.GoPackage) (bool, error) {
 	// 1. Check if the go source files have changed
-	// FIXME: implement
+	for _, file := range goPackage.GoFiles {
+		fullPath := filepath.Join(goPackage.Dir, file)
+		if _, exists := cd.changedGoFiles[fullPath]; exists {
+			return true, nil
+		}
+	}
 
 	// 2. Check if the go:embed files have changed
-	// FIXME: implement
+	// TODO: implement
 
-	// 3. Check if the dependencies have changed
+	return false, nil
+}
+
+func (cd *changeDetector) isModuleUpdated(goPackage *golang.GoPackage, changedPackages map[string]struct{}) (bool, error) {
 	changedModules, err := cd.listChangedModules(goPackage)
 	if err != nil {
 		return false, err
 	}
 	for _, module := range goPackage.Deps {
-		for module != "" {
-			// 3.1 Check other packages in the same module
-			// FIXME: implement
+		// 1 Check other packages in the same module
+		if _, exists := changedPackages[module]; exists {
+			return true, nil
+		}
 
-			// 3.2 Check if the third-party module has changed
+		// 2 Check if the third-party module has changed
+		for module != "" {
 			if _, exists := changedModules[module]; exists {
 				return true, nil
 			}
@@ -102,12 +144,14 @@ func (cd *changeDetector) isPackageChanged(goPackage *golang.GoPackage) (bool, e
 
 func (cd *changeDetector) listChangedModules(goPackage *golang.GoPackage) (map[string]struct{}, error) {
 	goModFullPath := goPackage.Module.GoMod
-	// FIXME: 同じgo.modに対して何度も呼ばれるのでキャッシュを使用する
+	if cache, ok := cd.changedModulesCache[goModFullPath]; ok {
+		return cache, nil
+	}
 	currentGoMod, err := cd.readGoModFile(goModFullPath, "")
 	if err != nil {
 		return nil, err
 	}
-	previousGoMod, err := cd.readGoModFile(goModFullPath, "HEAD~")
+	previousGoMod, err := cd.readGoModFile(goModFullPath, cd.config.BaseCommit)
 	if err != nil {
 		return nil, err
 	}
@@ -120,6 +164,7 @@ func (cd *changeDetector) listChangedModules(goPackage *golang.GoPackage) (map[s
 			changedModules[module] = struct{}{}
 		}
 	}
+	cd.changedModulesCache[goModFullPath] = changedModules
 	return changedModules, nil
 }
 

@@ -13,6 +13,7 @@ func main() {
 
 	changedPackages, err := detect.DetectChangedPackages(&detect.Config{
 		GitRootPath: gitRootPath,
+		BaseCommit:  "HEAD~",
 	})
 	if err != nil {
 		panic(err)

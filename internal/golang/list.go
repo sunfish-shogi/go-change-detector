@@ -19,8 +19,10 @@ type GoPackage struct {
 		GoMod     string // full path to the go.mod file
 		GoVersion string // Go version used in the module
 	}
-	Imports []string // import paths of the packages imported by this package
-	Deps    []string // paths of all packages imported by this package, recursively
+	GoFiles        []string // relative paths of Go source files in this package
+	IgnoredGoFiles []string // relative paths of Go source files ignored by the build tags
+	Imports        []string // import paths of the packages imported by this package
+	Deps           []string // paths of all packages imported by this package, recursively
 }
 
 func ListPackages(workingDir string) ([]GoPackage, error) {
