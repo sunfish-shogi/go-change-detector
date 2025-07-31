@@ -103,8 +103,12 @@ func (cd *changeDetector) detectChangedPackages() ([]Package, error) {
 
 	var results []Package
 	for pkg := range changedPackages {
+		relativeDir, err := filepath.Rel(cd.gitRootFullPath, changedPackages[pkg].Dir)
+		if err != nil {
+			return nil, err
+		}
 		results = append(results, Package{
-			Dir:        changedPackages[pkg].Dir,
+			Dir:        relativeDir,
 			ImportPath: changedPackages[pkg].ImportPath,
 		})
 	}
