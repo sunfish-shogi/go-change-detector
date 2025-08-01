@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/sunfish-shogi/go-change-detector/internal/git"
@@ -112,6 +113,9 @@ func (cd *changeDetector) detectChangedPackages() ([]Package, error) {
 			ImportPath: changedPackages[pkg].ImportPath,
 		})
 	}
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].ImportPath < results[j].ImportPath
+	})
 	return results, nil
 }
 
