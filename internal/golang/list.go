@@ -33,14 +33,19 @@ func ListPackages(workingDir string) ([]Package, error) {
 func goListJSON[T any](workingDir string, options ...string) ([]T, error) {
 	cmd := exec.Command(goCmd, append([]string{"list", "-json"}, options...)...)
 	cmd.Dir = workingDir
-	var out bytes.Buffer
-	cmd.Stdout = &out
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
 	err := cmd.Run()
 	if err != nil {
+		if stderr.Len() > 0 {
+			println(stderr.String())
+		}
 		return nil, fmt.Errorf("failed to run go-list: %w", err)
 	}
 
-	dec := json.NewDecoder(&out)
+	dec := json.NewDecoder(&stdout)
 	results := make([]T, 0, 64)
 	for {
 		var obj T

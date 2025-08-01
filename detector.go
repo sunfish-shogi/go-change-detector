@@ -217,7 +217,7 @@ func (cd *changeDetector) readGoModFile(fullPath string, gitRevision string) (*m
 	var data []byte
 	if gitRevision != "" {
 		if !strings.HasPrefix(fullPath, cd.gitRootFullPath) {
-			return nil, errors.New("go.mod file is not in the git root directory")
+			return nil, errors.New("go.mod file is not in the git project")
 		}
 		gitPath := strings.TrimPrefix(fullPath, cd.gitRootFullPath+"/")
 		cmd := exec.Command("git", "show", gitRevision+":"+gitPath)
