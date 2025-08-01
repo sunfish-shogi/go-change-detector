@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 
 	detector "github.com/sunfish-shogi/go-change-detector"
@@ -9,6 +10,15 @@ import (
 )
 
 func main() {
+	baseCommit := "HEAD~"
+	if len(os.Args) > 1 {
+		if os.Args[1] == "--help" || os.Args[1] == "-h" {
+			println("Usage: go-change-detector [base-commit]")
+			return
+		}
+		baseCommit = os.Args[1]
+	}
+
 	gitRootPath, err := git.GetRootPath(".")
 	if err != nil {
 		panic(err)
@@ -25,7 +35,7 @@ func main() {
 
 	changedPackages, err := detector.DetectChangedPackages(&detector.Config{
 		GitRootPath:   gitRootPath,
-		BaseCommit:    "HEAD~",
+		BaseCommit:    baseCommit,
 		GoModulePaths: goModulePaths,
 	})
 	if err != nil {
