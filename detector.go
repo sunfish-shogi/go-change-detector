@@ -225,7 +225,7 @@ func (cd *changeDetector) readGoModFile(fullPath string, gitRevision string) (*m
 		var out bytes.Buffer
 		cmd.Stdout = &out
 		if err := cmd.Run(); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to read file %s from git revision %s: %w", fullPath, gitRevision, err)
 		}
 		data = out.Bytes()
 	} else {

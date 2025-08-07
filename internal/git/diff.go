@@ -17,7 +17,7 @@ func ChangedFilesFrom(gitRootPath, revision string) ([]string, error) {
 		if stderr.Len() > 0 {
 			println(stderr.String())
 		}
-		return nil, fmt.Errorf("failed to get changed files: %w", err)
+		return nil, fmt.Errorf("failed to execute git-diff: %w", err)
 	}
 	files := strings.Split(strings.TrimSpace(string(out)), "\n")
 	return files, nil
