@@ -74,6 +74,7 @@ func newChangeDetector(config *Config) (*changeDetector, error) {
 }
 
 func (cd *changeDetector) detectChangedPackages() ([]Package, error) {
+	// List all Go packages in the specified modules
 	goPackages := make([]golang.Package, 0, 64)
 	for _, modulePath := range cd.config.GoModulePaths {
 		pkgs, err := golang.ListPackages(modulePath)
@@ -83,15 +84,18 @@ func (cd *changeDetector) detectChangedPackages() ([]Package, error) {
 		goPackages = append(goPackages, pkgs...)
 	}
 
+	// Filter packages that have changed
 	var changedPackages = make(map[string]*golang.Package)
+	var changedPackagesByNonBuildFiles = make(map[string]*golang.Package)
 	for _, goPackage := range goPackages {
-		if changed, err := cd.isPackageChanged(&goPackage); err != nil {
-			return nil, err
-		} else if changed {
+		if cd.isPackageChanged(&goPackage) {
 			changedPackages[goPackage.ImportPath] = &goPackage
+		} else if cd.isPackageChangedByNonBuildFiles(&goPackage) {
+			changedPackagesByNonBuildFiles[goPackage.ImportPath] = &goPackage
 		}
 	}
 
+	// List packages that have changed by dependencies
 	for _, goPackage := range goPackages {
 		if _, exists := changedPackages[goPackage.ImportPath]; exists {
 			continue // Skip packages that are already marked as changed
@@ -100,6 +104,13 @@ func (cd *changeDetector) detectChangedPackages() ([]Package, error) {
 		} else if updated {
 			changedPackages[goPackage.ImportPath] = &goPackage
 		}
+	}
+
+	// TODO: Detect changed packages imported by test files
+
+	// Merge packages changed by non-build files into the main changed packages
+	for _, goPackage := range changedPackagesByNonBuildFiles {
+		changedPackages[goPackage.ImportPath] = goPackage
 	}
 
 	var results []Package
@@ -119,19 +130,29 @@ func (cd *changeDetector) detectChangedPackages() ([]Package, error) {
 	return results, nil
 }
 
-func (cd *changeDetector) isPackageChanged(goPackage *golang.Package) (bool, error) {
+func (cd *changeDetector) isPackageChanged(goPackage *golang.Package) bool {
 	// 1. Check if the go source files have changed
 	for _, file := range goPackage.GoFiles {
 		fullPath := filepath.Join(goPackage.Dir, file)
 		if _, exists := cd.changedGoFiles[fullPath]; exists {
-			return true, nil
+			return true
 		}
 	}
 
 	// 2. Check if the go:embed files have changed
 	// TODO: implement
 
-	return false, nil
+	return false
+}
+
+func (cd *changeDetector) isPackageChangedByNonBuildFiles(goPackage *golang.Package) bool {
+	for _, file := range append(goPackage.IgnoredGoFiles, goPackage.TestGoFiles...) {
+		fullPath := filepath.Join(goPackage.Dir, file)
+		if _, exists := cd.changedGoFiles[fullPath]; exists {
+			return true
+		}
+	}
+	return false
 }
 
 func (cd *changeDetector) isModuleUpdated(goPackage *golang.Package, changedPackages map[string]*golang.Package) (bool, error) {

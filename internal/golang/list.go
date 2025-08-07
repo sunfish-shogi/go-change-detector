@@ -22,7 +22,9 @@ type Package struct {
 	}
 	GoFiles        []string // relative paths of Go source files in this package
 	IgnoredGoFiles []string // relative paths of Go source files ignored by the build tags
+	TestGoFiles    []string // relative paths of Go test files in this package
 	Imports        []string // import paths of the packages imported by this package
+	TestImports    []string // import paths of the packages imported by the test files in this package
 	Deps           []string // paths of all packages imported by this package, recursively
 }
 
