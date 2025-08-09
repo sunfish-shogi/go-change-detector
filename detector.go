@@ -1,12 +1,10 @@
 package detector
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -168,16 +166,16 @@ func (cd *changeDetector) listChangedModules(goPackage *packages.Package) (map[s
 	if cache, ok := cd.changedModulesCache[goModFullPath]; ok {
 		return cache, nil
 	}
-	currentGoMod, err := cd.readGoModFile(goModFullPath, "")
+	currentGoMod, err := cd.readGoModFile(goModFullPath)
 	if err != nil {
 		return nil, err
 	}
-	previousGoMod, err := cd.readGoModFile(goModFullPath, cd.config.BaseCommit)
+	previousGoMod, err := cd.readGoModFileFromGit(goModFullPath, cd.config.BaseCommit)
 	if err != nil {
 		return nil, err
 	}
-	previousVersions := getModuleVersions(previousGoMod)
 	currentVersions := getModuleVersions(currentGoMod)
+	previousVersions := getModuleVersions(previousGoMod)
 	changedModules := make(map[string]struct{})
 	for module, currentVersion := range currentVersions {
 		previousVersion, exists := previousVersions[module]
@@ -190,6 +188,9 @@ func (cd *changeDetector) listChangedModules(goPackage *packages.Package) (map[s
 }
 
 func getModuleVersions(goMod *modfile.File) map[string]string {
+	if goMod == nil {
+		return nil
+	}
 	replaceMap := make(map[module.Version]module.Version)
 	for _, replace := range goMod.Replace {
 		replaceMap[replace.Old] = replace.New
@@ -213,28 +214,30 @@ func getModuleVersions(goMod *modfile.File) map[string]string {
 	return moduleVersions
 }
 
-func (cd *changeDetector) readGoModFile(fullPath string, gitRevision string) (*modfile.File, error) {
-	var data []byte
-	if gitRevision != "" {
-		if !strings.HasPrefix(fullPath, cd.gitRootFullPath) {
-			return nil, errors.New("go.mod file is not in the git project")
-		}
-		gitPath := strings.TrimPrefix(fullPath, cd.gitRootFullPath+"/")
-		cmd := exec.Command("git", "show", gitRevision+":"+gitPath)
-		cmd.Dir = cd.gitRootFullPath
-		var out bytes.Buffer
-		cmd.Stdout = &out
-		if err := cmd.Run(); err != nil {
-			return nil, fmt.Errorf("failed to read file %s from git revision %s: %w", fullPath, gitRevision, err)
-		}
-		data = out.Bytes()
-	} else {
-		var err error
-		data, err = os.ReadFile(fullPath)
-		if err != nil {
-			return nil, err
-		}
+func (cd *changeDetector) readGoModFile(fullPath string) (*modfile.File, error) {
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		return nil, err
 	}
+	return parseGoModFile(fullPath, data)
+}
 
-	return modfile.Parse("go.mod", data, nil)
+func (cd *changeDetector) readGoModFileFromGit(fullPath string, gitRevision string) (*modfile.File, error) {
+	if !strings.HasPrefix(fullPath, cd.gitRootFullPath) {
+		return nil, errors.New("go.mod file is not in the git project")
+	}
+	gitPath := strings.TrimPrefix(fullPath, cd.gitRootFullPath+"/")
+	data, exists, err := git.ReadFile(cd.context, cd.gitRootFullPath, gitRevision, gitPath)
+	if err != nil || !exists {
+		return nil, err
+	}
+	return parseGoModFile(fullPath, data)
+}
+
+func parseGoModFile(fullPath string, data []byte) (*modfile.File, error) {
+	mod, err := modfile.Parse("go.mod", data, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse go.mod file %s: %w", fullPath, err)
+	}
+	return mod, nil
 }
