@@ -44,6 +44,6 @@ func main() {
 	}
 
 	for _, pkg := range changedPackages {
-		println(pkg.Dir)
+		println(pkg.Dir, pkg.ImportPath)
 	}
 }

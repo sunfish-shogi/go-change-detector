@@ -9,9 +9,7 @@ import (
 func ListPackages(ctx context.Context, workingDir string) ([]*packages.Package, error) {
 	cfg := &packages.Config{
 		Mode: packages.LoadFiles | packages.LoadImports |
-			packages.NeedDeps | packages.NeedForTest |
-			packages.NeedModule | packages.NeedEmbedFiles |
-			packages.NeedTarget,
+			packages.NeedDeps | packages.NeedModule | packages.NeedEmbedFiles,
 		Context: ctx,
 		Dir:     workingDir,
 		Tests:   true,

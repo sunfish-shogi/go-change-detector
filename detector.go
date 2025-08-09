@@ -40,7 +40,7 @@ type changeDetector struct {
 	config              *Config
 	gitRootFullPath     string                         // full path to the git root directory
 	changedModulesCache map[string]map[string]struct{} // cache for changed modules
-	changedGoFiles      map[string]struct{}            // full paths of changed Go source files
+	changedFiles        map[string]struct{}            // full paths of changed files
 }
 
 func newChangeDetector(ctx context.Context, config *Config) (*changeDetector, error) {
@@ -60,18 +60,16 @@ func newChangeDetector(ctx context.Context, config *Config) (*changeDetector, er
 	if err != nil {
 		return nil, err
 	}
-	changedGoFiles := make(map[string]struct{})
+	changedFilesMap := make(map[string]struct{}, len(changedFiles))
 	for _, file := range changedFiles {
-		if strings.HasSuffix(file, ".go") {
-			changedGoFiles[filepath.Join(gitRootFullPath, file)] = struct{}{}
-		}
+		changedFilesMap[filepath.Join(gitRootFullPath, file)] = struct{}{}
 	}
 	return &changeDetector{
 		context:             ctx,
 		config:              config,
 		gitRootFullPath:     gitRootFullPath,
 		changedModulesCache: make(map[string]map[string]struct{}),
-		changedGoFiles:      changedGoFiles,
+		changedFiles:        changedFilesMap,
 	}, nil
 }
 
@@ -123,9 +121,11 @@ func (cd *changeDetector) detectChangedPackages() ([]Package, error) {
 }
 
 func (cd *changeDetector) isPackageChanged(goPackage *packages.Package) bool {
-	for _, file := range append(goPackage.GoFiles, goPackage.EmbedFiles...) {
-		fullPath := filepath.Join(goPackage.Dir, file)
-		if _, exists := cd.changedGoFiles[fullPath]; exists {
+	files := goPackage.GoFiles
+	files = append(files, goPackage.OtherFiles...)
+	files = append(files, goPackage.EmbedFiles...)
+	for _, filePath := range files {
+		if _, exists := cd.changedFiles[filePath]; exists {
 			return true
 		}
 	}
