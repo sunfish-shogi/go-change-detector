@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 
@@ -19,7 +20,7 @@ func main() {
 		baseCommit = os.Args[1]
 	}
 
-	gitRootPath, err := git.GetRootPath(".")
+	gitRootPath, err := git.GetRootPath(context.Background(), ".")
 	if err != nil {
 		panic(err)
 	}
@@ -33,7 +34,7 @@ func main() {
 		goModulePaths[i] = filepath.Dir(goModPath)
 	}
 
-	changedPackages, err := detector.DetectChangedPackages(&detector.Config{
+	changedPackages, err := detector.DetectChangedPackages(context.Background(), &detector.Config{
 		GitRootPath:   gitRootPath,
 		BaseCommit:    baseCommit,
 		GoModulePaths: goModulePaths,

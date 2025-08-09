@@ -2,13 +2,14 @@ package git
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
 )
 
-func ChangedFilesFrom(gitRootPath, revision string) ([]string, error) {
-	cmd := exec.Command(gitCmd, "diff", "--name-only", revision)
+func ChangedFilesFrom(ctx context.Context, gitRootPath, revision string) ([]string, error) {
+	cmd := exec.CommandContext(ctx, gitCmd, "diff", "--name-only", revision)
 	cmd.Dir = gitRootPath
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

@@ -2,13 +2,14 @@ package git
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
 )
 
-func GetRootPath(workingDir string) (string, error) {
-	cmd := exec.Command(gitCmd, "rev-parse", "--show-toplevel")
+func GetRootPath(ctx context.Context, workingDir string) (string, error) {
+	cmd := exec.CommandContext(ctx, gitCmd, "rev-parse", "--show-toplevel")
 	cmd.Dir = workingDir
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

@@ -2,12 +2,13 @@ package git
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 )
 
-func ReadFile(gitRootPath, gitRevision, path string) ([]byte, error) {
-	cmd := exec.Command(gitCmd, "show", gitRevision+":"+path)
+func ReadFile(ctx context.Context, gitRootPath, gitRevision, path string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, gitCmd, "show", gitRevision+":"+path)
 	cmd.Dir = gitRootPath
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
